@@ -1,0 +1,42 @@
+{
+  "name": "color-comments-br",
+  "displayName": "Comentários Coloridos BR",
+  "description": "Destaque seus comentários com tags simples de cores (g, r, b, hex, rgb).",
+  "version": "1.0.0",
+  "publisher": "EnzoRSimette",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EnzoRSimette/VSCODE-color-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/EnzoRSimette/VSCODE-color-extension/issues"
+  },
+  "homepage": "https://github.com/EnzoRSimette/VSCODE-color-extension#readme",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Comentários Coloridos",
+      "properties": {
+        "colorComments.opacity": {
+          "type": "number",
+          "default": 1,
+          "description": "Opacidade do texto do comentário (0 a 1)."
+        },
+        "colorComments.fontWeight": {
+          "type": "string",
+          "default": "bold",
+          "description": "Peso da fonte (bold, normal, 500, etc)."
+        }
+      }
+    }
+  }
+}
