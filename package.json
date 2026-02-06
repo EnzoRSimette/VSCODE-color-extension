@@ -1,21 +1,37 @@
 {
-  "name": "color-comments-br",
-  "displayName": "Comentários Coloridos BR",
-  "description": "Destaque seus comentários com tags simples de cores (g, r, b, hex, rgb).",
+  "name": "colored-comments",
+  "displayName": "Colored Comments",
+  "description": "Highlight your comments with simple color tags (g, r, b, hex, rgb). Fully configurable.",
   "version": "1.0.0",
+  "icon": "icon.png",
   "publisher": "EnzoRSimette",
   "repository": {
     "type": "git",
     "url": "https://github.com/EnzoRSimette/VSCODE-color-extension.git"
   },
-  "bugs": {
-    "url": "https://github.com/EnzoRSimette/VSCODE-color-extension/issues"
-  },
-  "homepage": "https://github.com/EnzoRSimette/VSCODE-color-extension#readme",
   "engines": {
     "vscode": "^1.70.0"
   },
   "categories": [
+    "Formatters",
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "Formatters",
+    "Comments",
+    "Colors",
+    "Colorize",
+    "Syntax Highlighting",
+    "Visualization",
+    "Developer Tools",
+    "UI Enhancement",
+    "Code Styling",
+    "Theme",
+    "Customization",
+    "Productivity",
+    "Editor Tools",
+    "Design",
     "Other"
   ],
   "activationEvents": [
@@ -24,17 +40,69 @@
   "main": "./extension.js",
   "contributes": {
     "configuration": {
-      "title": "Comentários Coloridos",
+      "title": "Color Comments",
       "properties": {
-        "colorComments.opacity": {
-          "type": "number",
-          "default": 1,
-          "description": "Opacidade do texto do comentário (0 a 1)."
-        },
         "colorComments.fontWeight": {
           "type": "string",
-          "default": "bold",
-          "description": "Peso da fonte (bold, normal, 500, etc)."
+          "default": "normal",
+          "description": "Default font weight for comments (e.g., normal, bold, 500)."
+        },
+        "colorComments.fontStyle": {
+          "type": "string",
+          "default": "normal",
+          "description": "Default font style (normal or italic)."
+        },
+        "colorComments.tags": {
+          "type": "array",
+          "description": "List of tags and their colors. Use 'editor.foreground' for dynamic theme color.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tag": {
+                "type": "string",
+                "description": "The tag text (e.g., '!', 'g', 'todo')."
+              },
+              "color": {
+                "type": "string",
+                "description": "Hex code, color name, or 'editor.foreground'."
+              },
+              "strikethrough": {
+                "type": "boolean",
+                "default": false
+              },
+              "underline": {
+                "type": "boolean",
+                "default": false
+              },
+              "bold": {
+                "type": "boolean",
+                "default": false
+              },
+              "italic": {
+                "type": "boolean",
+                "default": false
+              },
+              "backgroundColor": {
+                "type": "string",
+                "description": "Background color (optional)."
+              }
+            }
+          },
+          "default": [
+            { "tag": "wb", "color": "editor.foreground", "bold": false },
+            { "tag": "w", "color": "#FFFFFF", "bold": false },
+            { "tag": "black", "color": "#000000", "bold": false },
+            { "tag": "g", "color": "#98C379", "bold": false },
+            { "tag": "o", "color": "#FF8C00", "bold": false },
+            { "tag": "r", "color": "#FF2D00", "bold": false },
+            { "tag": "!", "color": "#FF2D00", "bold": true },
+            { "tag": "b", "color": "#3498DB", "bold": false },
+            { "tag": "?", "color": "#3498DB", "bold": true },
+            { "tag": "p", "color": "#966FD6", "bold": false },
+            { "tag": "y", "color": "#E5C07B", "bold": false },
+            { "tag": "*", "color": "#98C379", "bold": false },
+            { "tag": "todo", "color": "#FF8C00", "bold": true }
+          ]
         }
       }
     }

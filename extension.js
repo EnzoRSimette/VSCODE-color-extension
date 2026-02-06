@@ -1,115 +1,171 @@
 const vscode = require('vscode');
 
-// Mapeamento das letras para cores e opções de estilo
-const tagConfig = {
-    'g': { color: '#4caf50', label: 'Verde' },       // Green
-    'o': { color: '#ff9800', label: 'Laranja' },     // Orange
-    'r': { color: '#f44336', label: 'Vermelho' },    // Red
-    '!': { color: '#ff2c2c', label: 'Alerta', fontWeight: 'bold' }, // Red (Alert)
-    'b': { color: '#2196f3', label: 'Azul' },        // Blue
-    '?': { color: '#3498db', label: 'Dúvida' },      // Blue (Query)
-    'p': { color: '#9c27b0', label: 'Roxo' },        // Purple
-    'y': { color: '#ffeb3b', label: 'Amarelo' },     // Yellow
-    'wb': { color: new vscode.ThemeColor('editor.foreground'), label: 'Padrão' } // White/Black (Theme)
-};
-
-// Cache para decorações de cores customizadas (rgb/hex) para não criar infinitos objetos
+// Caches for decorations
 let customDecorationTypes = new Map();
-// Cache para decorações padrão
 let staticDecorationTypes = new Map();
 
 function activate(context) {
-    console.log('Extensão "Comentários Coloridos" ativa!');
-
-    // Criar decorações estáticas (g, r, b, etc.)
-    Object.keys(tagConfig).forEach(tag => {
-        const config = tagConfig[tag];
-        const decoration = vscode.window.createTextEditorDecorationType({
-            color: config.color,
-            fontWeight: config.fontWeight || 'bold',
-            rangeBehavior: vscode.DecorationRangeBehavior.OpenOpen
-        });
-        staticDecorationTypes.set(tag, decoration);
-    });
+    console.log('Extension "Color Comments" is active!');
 
     let activeEditor = vscode.window.activeTextEditor;
+    let configTags = [];
+    let globalConfig = {};
+
+    function escapeRegExp(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function reloadConfiguration() {
+        // Clear existing static decorations
+        staticDecorationTypes.forEach(dec => dec.dispose());
+        staticDecorationTypes.clear();
+
+        const config = vscode.workspace.getConfiguration('colorComments');
+        globalConfig = {
+            fontWeight: config.get('fontWeight') || 'normal',
+            fontStyle: config.get('fontStyle') || 'normal'
+        };
+
+        configTags = config.get('tags') || [];
+
+        // Build decoration types for each tag in JSON
+        configTags.forEach(tagItem => {
+
+            // LOGIC FOR DYNAMIC THEME COLOR
+            // If the user set "editor.foreground" in JSON, we convert it to a ThemeColor object
+            let finalColor = tagItem.color;
+            if (finalColor === 'editor.foreground') {
+                finalColor = new vscode.ThemeColor('editor.foreground');
+            }
+
+            const options = {
+                color: finalColor,
+                backgroundColor: tagItem.backgroundColor || 'transparent',
+                fontWeight: tagItem.bold ? 'bold' : globalConfig.fontWeight,
+                fontStyle: tagItem.italic ? 'italic' : globalConfig.fontStyle,
+                textDecoration: []
+            };
+
+            if (tagItem.strikethrough) options.textDecoration.push('line-through');
+            if (tagItem.underline) options.textDecoration.push('underline');
+
+            const decorationString = options.textDecoration.join(' ') || undefined;
+
+            // Decoration Normal
+            const decorationNormal = vscode.window.createTextEditorDecorationType({
+                color: options.color,
+                backgroundColor: options.backgroundColor,
+                fontWeight: options.fontWeight,
+                fontStyle: options.fontStyle,
+                textDecoration: decorationString,
+                rangeBehavior: vscode.DecorationRangeBehavior.OpenOpen
+            });
+            staticDecorationTypes.set(tagItem.tag, decorationNormal);
+
+            // Decoration Italic (suffix 'i')
+            const decorationItalic = vscode.window.createTextEditorDecorationType({
+                ...options,
+                fontStyle: 'italic',
+                textDecoration: decorationString,
+                rangeBehavior: vscode.DecorationRangeBehavior.OpenOpen
+            });
+            staticDecorationTypes.set(tagItem.tag + 'i', decorationItalic);
+        });
+
+        triggerUpdateDecorations();
+    }
 
     function updateDecorations() {
         if (!activeEditor) return;
-
         const text = activeEditor.document.getText();
-        
-        // Arrays para armazenar os ranges (posições) de cada tipo de tag encontrada
-        const decoratorsMap = new Map(); // Mapa para tags estáticas
-        const customDecoratorsMap = new Map(); // Mapa para tags customizadas (hex/rgb)
 
-        // Inicializa arrays vazios para tags estáticas
+        const decoratorsMap = new Map();
+        const customDecoratorsMap = new Map();
+
         staticDecorationTypes.forEach((_, key) => decoratorsMap.set(key, []));
 
-        // REGEX EXPLICADO:
-        // 1. (Start): Captura inícios de comentários: //, ///, #, /*, <!--
-        // 2. \s*: Espaços opcionais
-        // 3. (Tag): Captura as tags (g, o, r...) OU customizadas (rgb(...), #...)
-        // 4. (Separator)?: Captura opcional de :
-        const regEx = /(\/\/|\/\/\/|\#|\/\*|<!--)\s*([gorpby]|wb|!|\?|\((#[0-9a-fA-F]{3,6}|rgb\([^)]+\))\))(:)?/g;
+        // --- REGEX CONSTRUCTION ---
+        const tagNames = configTags.map(t => t.tag).filter(t => t);
+
+        // Sort longest first to avoid partial matches
+        tagNames.sort((a, b) => b.length - a.length);
+
+        const escapedTags = tagNames.map(escapeRegExp).join('|');
+
+        // Regex pattern:
+        // Group 1: Comment Start
+        // Group 2: The Tag (from JSON OR Custom Hex)
+        // Group 3: Optional 'i' (Italic)
+        // Group 4: Optional colon
+        const tagPattern = escapedTags.length > 0
+            ? `(?:${escapedTags})|\\((?:#[0-9a-fA-F]{3,6}|rgb\\([^)]+\\))\\)`
+            : `\\((?:#[0-9a-fA-F]{3,6}|rgb\\([^)]+\\))\\)`;
+
+        const regEx = new RegExp(`(\\/\\/|\\/\\/\\/|\\#|\\/\\*|<!--)(${tagPattern})(i)?(:)?`, 'g');
 
         let match;
         while ((match = regEx.exec(text))) {
             const startPos = activeEditor.document.positionAt(match.index);
             const endPos = activeEditor.document.lineAt(startPos.line).range.end;
-            
-            // Ajuste para comentários de bloco (/* ... */ ou <!-- ... -->)
-            // Se for bloco, tentamos encontrar o fechamento na mesma linha ou assumimos até o fim da linha
             let decorationRange = new vscode.Range(startPos, endPos);
-            
-            // O grupo 2 é a tag (ex: 'g', '!', '(rgb(0,0,0))')
-            let tag = match[2]; 
 
-            // Verificar se é customizado (começa com parenteses)
-            if (tag.startsWith('(') && tag.endsWith(')')) {
-                const colorValue = tag.substring(1, tag.length - 1); // Remove parenteses
-                
-                if (!customDecoratorsMap.has(colorValue)) {
-                    customDecoratorsMap.set(colorValue, []);
+            const tag = match[2];
+            const isItalic = match[3] === 'i';
+
+            // --- Custom Color Logic: (hex) ---
+            if (tag.startsWith('(')) {
+                const colorValue = tag.substring(1, tag.length - 1);
+                const cacheKey = colorValue + (isItalic ? 'i' : '');
+
+                if (!customDecoratorsMap.has(cacheKey)) {
+                    customDecoratorsMap.set(cacheKey, {
+                        ranges: [],
+                        color: colorValue,
+                        isItalic: isItalic
+                    });
                 }
-                customDecoratorsMap.get(colorValue).push({ range: decorationRange });
-            } 
-            // Tags estáticas
-            else if (decoratorsMap.has(tag)) {
-                decoratorsMap.get(tag).push({ range: decorationRange });
+                customDecoratorsMap.get(cacheKey).ranges.push(decorationRange);
+            }
+            // --- Static Tag Logic ---
+            else {
+                const mapKey = tag + (isItalic ? 'i' : '');
+
+                if (decoratorsMap.has(mapKey)) {
+                    decoratorsMap.get(mapKey).push({ range: decorationRange });
+                }
             }
         }
 
-        // 1. Aplicar Decorações Estáticas
-        staticDecorationTypes.forEach((decorationType, tag) => {
-            const ranges = decoratorsMap.get(tag);
+        // Apply Static Decorations
+        staticDecorationTypes.forEach((decorationType, key) => {
+            const ranges = decoratorsMap.get(key);
             activeEditor.setDecorations(decorationType, ranges);
         });
 
-        // 2. Aplicar Decorações Customizadas (Hex/RGB)
-        customDecoratorsMap.forEach((ranges, colorValue) => {
+        // Apply Custom Decorations
+        customDecoratorsMap.forEach((data, cacheKey) => {
             let decorationType;
-            
-            // Tenta recuperar do cache global ou cria novo
-            if (customDecorationTypes.has(colorValue)) {
-                decorationType = customDecorationTypes.get(colorValue);
+            if (customDecorationTypes.has(cacheKey)) {
+                decorationType = customDecorationTypes.get(cacheKey);
             } else {
                 decorationType = vscode.window.createTextEditorDecorationType({
-                    color: colorValue,
-                    fontWeight: 'bold'
+                    color: data.color,
+                    fontWeight: globalConfig.fontWeight,
+                    fontStyle: data.isItalic ? 'italic' : globalConfig.fontStyle
                 });
-                customDecorationTypes.set(colorValue, decorationType);
+                customDecorationTypes.set(cacheKey, decorationType);
             }
-            
-            activeEditor.setDecorations(decorationType, ranges);
+            activeEditor.setDecorations(decorationType, data.ranges);
         });
     }
+
+    // Initial Load
+    reloadConfiguration();
 
     if (activeEditor) {
         triggerUpdateDecorations();
     }
 
-    // Eventos para disparar a atualização
     vscode.window.onDidChangeActiveTextEditor(editor => {
         activeEditor = editor;
         if (editor) {
@@ -123,17 +179,25 @@ function activate(context) {
         }
     }, null, context.subscriptions);
 
+    vscode.workspace.onDidChangeConfiguration(event => {
+        if (event.affectsConfiguration('colorComments')) {
+            reloadConfiguration();
+        }
+    }, null, context.subscriptions);
+
     var timeout = null;
     function triggerUpdateDecorations() {
         if (timeout) {
             clearTimeout(timeout);
         }
-        // Pequeno delay para performance (não rodar a cada tecla digitada instantaneamente)
         timeout = setTimeout(updateDecorations, 100);
     }
 }
 
-function deactivate() {}
+function deactivate() {
+    staticDecorationTypes.forEach(d => d.dispose());
+    customDecorationTypes.forEach(d => d.dispose());
+}
 
 module.exports = {
     activate,
